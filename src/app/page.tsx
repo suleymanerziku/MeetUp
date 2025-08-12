@@ -42,17 +42,17 @@ export default function Home() {
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
             <h2 className="text-3xl font-bold tracking-tight text-foreground font-headline sm:text-4xl">
-              High-quality video calls.
+              Simple, Secure Video Calls.
             </h2>
             <p className="mt-2 text-lg text-muted-foreground">
-              Secure, simple, and reliable video conferencing for everyone.
+              Join or create a meeting in seconds.
             </p>
           </div>
           <Card className="shadow-lg bg-card/80 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="font-headline">Start or join a meeting</CardTitle>
               <CardDescription>
-                Create a new meeting room or enter a code to join one.
+                Create a meeting or enter a code to join.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
