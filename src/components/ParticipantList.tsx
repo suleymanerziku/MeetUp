@@ -1,22 +1,21 @@
+// src/components/ParticipantList.tsx
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Mic, MicOff, Video, VideoOff, User } from 'lucide-react';
 
-const participants = [
-  { name: 'You', isMuted: false, isCameraOn: true },
-  { name: 'Alex Johnson', isMuted: true, isCameraOn: true },
-  { name: 'Maria Garcia', isMuted: false, isCameraOn: false },
-  { name: 'Chen Wei', isMuted: false, isCameraOn: true },
-  { name: 'Fatima Al-Fassi', isMuted: true, isCameraOn: false },
-  { name: 'David Smith', isMuted: false, isCameraOn: true },
-];
+type Participant = {
+    name: string;
+    isMuted: boolean;
+    isCameraOn: boolean;
+}
 
 type ParticipantListProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  participants: Participant[];
 };
 
-export function ParticipantList({ open, onOpenChange }: ParticipantListProps) {
+export function ParticipantList({ open, onOpenChange, participants }: ParticipantListProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent>

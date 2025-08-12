@@ -1,3 +1,4 @@
+// src/app/page.tsx
 "use client";
 
 import { useState } from 'react';
@@ -7,18 +8,28 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, LogIn } from 'lucide-react';
+import { useAuth } from '@/hooks/use-auth.tsx';
 
 export default function Home() {
   const [meetingCode, setMeetingCode] = useState('');
   const router = useRouter();
+  const { user } = useAuth();
 
   const createNewMeeting = () => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
     const newMeetingId = Math.random().toString(36).substring(2, 11);
     router.push(`/meeting/${newMeetingId}`);
   };
 
   const joinMeeting = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) {
+      router.push('/login');
+      return;
+    }
     if (meetingCode.trim()) {
       router.push(`/meeting/${meetingCode.trim()}`);
     }

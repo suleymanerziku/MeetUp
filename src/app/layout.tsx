@@ -1,11 +1,9 @@
-import type {Metadata} from 'next';
+// src/app/layout.tsx
+"use client";
+
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
-
-export const metadata: Metadata = {
-  title: 'MeetUp Mobile',
-  description: 'A mobile-first video conferencing app built with Next.js.',
-};
+import { AuthProvider } from '@/hooks/use-auth.tsx';
 
 export default function RootLayout({
   children,
@@ -15,13 +13,17 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <title>MeetUp Mobile</title>
+        <meta name="description" content="A mobile-first video conferencing app built with Next.js." />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased">
-        {children}
-        <Toaster />
+        <AuthProvider>
+          {children}
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   );

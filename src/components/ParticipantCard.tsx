@@ -1,3 +1,7 @@
+// src/components/ParticipantCard.tsx
+"use client";
+
+import { useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { MicOff, User } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -10,7 +14,7 @@ type ParticipantCardProps = {
   isCameraOff?: boolean;
   isCurrentUser?: boolean;
   background?: string | null;
-  imageUrl?: string;
+  stream?: MediaStream;
   dataAiHint?: string;
   className?: string;
 };
@@ -21,25 +25,31 @@ export function ParticipantCard({
   isCameraOff = false,
   isCurrentUser = false,
   background,
-  imageUrl,
+  stream,
   dataAiHint,
   className,
 }: ParticipantCardProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  
   const containerStyle = isCurrentUser && background ? { backgroundImage: `url(${background})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {};
-  const showAvatar = isCameraOff || (isCurrentUser && !background && isCameraOff);
+  const showAvatar = isCameraOff || !stream;
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
 
   return (
     <Card className={cn("relative aspect-video w-full overflow-hidden bg-muted/30 flex items-center justify-center group rounded-lg shadow-md", className)}>
       <div className="absolute inset-0 transition-all duration-300" style={containerStyle}>
-        {!isCameraOff && imageUrl && (
-          <Image
-            src={imageUrl}
-            alt={`Video feed of ${name}`}
-            fill
-            className={cn("object-cover", isCurrentUser && background ? 'opacity-0' : 'opacity-100')}
-            data-ai-hint={dataAiHint}
-          />
-        )}
+        <video 
+            ref={videoRef} 
+            className={cn("w-full h-full object-cover", { 'hidden': showAvatar || (isCurrentUser && background) })} 
+            autoPlay 
+            playsInline 
+            muted={isCurrentUser}
+        />
       </div>
 
       {showAvatar && (
@@ -52,6 +62,10 @@ export function ParticipantCard({
           </Avatar>
           <p className="font-medium text-background bg-black/30 px-2 py-1 rounded-md">{name}</p>
         </div>
+      )}
+
+       {!isCurrentUser && background && (
+        <div className="absolute inset-0 bg-black/50" />
       )}
 
       <div className="absolute bottom-2 left-2 z-20 flex items-center gap-2 rounded-full bg-black/50 px-3 py-1 text-xs text-white">
