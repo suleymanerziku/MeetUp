@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Video, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth.tsx';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -20,11 +20,7 @@ export function Header() {
 
   return (
     <header className="absolute top-0 left-0 right-0 z-10 py-4 px-4 sm:px-6 lg:px-8">
-      <div className="flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 text-foreground">
-          <Video className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold font-headline">Dagu Meet</h1>
-        </Link>
+      <div className="flex items-center justify-end">
         <div className="flex items-center gap-2">
           {user ? (
             <DropdownMenu>
