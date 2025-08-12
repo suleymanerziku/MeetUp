@@ -39,26 +39,30 @@ export default function Home() {
     <div className="relative flex flex-col min-h-screen bg-background">
       <Header />
       <main className="flex flex-1 items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-8">
+        <div className="w-full max-w-2xl space-y-8 text-center">
+          <h1 className="text-4xl font-bold font-headline">Dagu Meet</h1>
           <Card className="shadow-lg bg-card/80 backdrop-blur-sm">
-            <CardContent className="space-y-4 pt-6">
-              <Button onClick={createNewMeeting} className="w-full" size="lg" variant="default">
-                <Plus className="mr-2 h-5 w-5" />
-                New Meeting
-              </Button>
-              <form onSubmit={joinMeeting} className="flex items-center gap-2">
-                <Input
-                  type="text"
-                  placeholder="Enter a code or link"
-                  value={meetingCode}
-                  onChange={(e) => setMeetingCode(e.target.value)}
-                  className="flex-grow"
-                />
-                <Button type="submit" variant="secondary" disabled={!meetingCode.trim()}>
-                  <LogIn className="h-5 w-5" />
-                  <span className="sr-only">Join</span>
+            <CardContent className="pt-6">
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                 <Button onClick={createNewMeeting} className="w-full sm:w-auto" size="lg" variant="default">
+                  <Plus className="mr-2 h-5 w-5" />
+                  New Meeting
                 </Button>
-              </form>
+                <div className="w-full h-px sm:w-px sm:h-8 bg-border mx-4"></div>
+                <form onSubmit={joinMeeting} className="flex items-center gap-2 w-full sm:w-auto flex-grow">
+                  <Input
+                    type="text"
+                    placeholder="Enter a code or link"
+                    value={meetingCode}
+                    onChange={(e) => setMeetingCode(e.target.value)}
+                    className="flex-grow"
+                  />
+                  <Button type="submit" variant="secondary" disabled={!meetingCode.trim()} size="lg">
+                    <LogIn className="h-5 w-5 sm:mr-2" />
+                    <span className="hidden sm:inline">Join</span>
+                  </Button>
+                </form>
+              </div>
             </CardContent>
           </Card>
         </div>
