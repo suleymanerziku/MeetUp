@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Plus, LogIn } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth.tsx';
 
@@ -40,22 +40,8 @@ export default function Home() {
       <Header />
       <main className="flex flex-1 items-center justify-center p-4">
         <div className="w-full max-w-md space-y-8">
-          <div className="text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground font-headline sm:text-4xl">
-              Simple, Secure Video Calls.
-            </h2>
-            <p className="mt-2 text-lg text-muted-foreground">
-              Join or create a meeting in seconds.
-            </p>
-          </div>
           <Card className="shadow-lg bg-card/80 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="font-headline">Start or join a meeting</CardTitle>
-              <CardDescription>
-                Create a meeting or enter a code to join.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 pt-6">
               <Button onClick={createNewMeeting} className="w-full" size="lg" variant="default">
                 <Plus className="mr-2 h-5 w-5" />
                 New Meeting
