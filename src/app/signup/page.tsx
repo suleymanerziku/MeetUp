@@ -61,7 +61,7 @@ export default function SignupPage() {
               <Label htmlFor="password">Password</Label>
               <Input id="password" type="password" required value={password} onChange={e => setPassword(e.target.value)} />
             </div>
-            <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
+            <Button type="submit" className="w-full">
               Create Account
             </Button>
             <div className="mt-4 text-center text-sm">

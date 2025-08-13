@@ -52,7 +52,7 @@ export function Header() {
               <Button variant="ghost" asChild>
                 <Link href="/login">Log In</Link>
               </Button>
-              <Button asChild className="bg-accent text-accent-foreground hover:bg-accent/90">
+              <Button asChild>
                 <Link href="/signup">Sign Up</Link>
               </Button>
             </>
