@@ -49,10 +49,10 @@ export function Header() {
 
           ) : (
             <>
-              <Button variant="ghost" asChild>
+              <Button variant="ghost" asChild className="hover:bg-transparent hover:text-primary">
                 <Link href="/login">Log In</Link>
               </Button>
-              <Button asChild>
+              <Button asChild className="bg-primary hover:bg-primary/90">
                 <Link href="/signup">Sign Up</Link>
               </Button>
             </>
