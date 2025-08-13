@@ -41,7 +41,7 @@ export default function Home() {
         <div className="w-full max-w-2xl space-y-8 text-center">
           
           <div className="flex w-full items-center gap-4">
-            <Button onClick={createNewMeeting} size="lg" className="bg-primary hover:bg-primary/90 flex-shrink-0 px-4">
+            <Button onClick={createNewMeeting} size="lg" className="bg-primary hover:bg-primary/90 flex-shrink-0 px-4 rounded-full">
               <Video className="h-6 w-6" />
               <span className="hidden md:inline ml-2">Create Meeting</span>
             </Button>
