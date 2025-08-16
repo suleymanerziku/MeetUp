@@ -8,11 +8,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Video, Keyboard } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth.tsx';
+import { useToast } from '@/hooks/use-toast';
+import { db } from '@/lib/firebase';
+import { ref, get } from 'firebase/database';
 
 export default function Home() {
   const [meetingCode, setMeetingCode] = useState('');
   const router = useRouter();
   const { user } = useAuth();
+  const { toast } = useToast();
 
   const createNewMeeting = () => {
     if (!user) {
@@ -23,14 +27,25 @@ export default function Home() {
     router.push(`/meeting/${newMeetingId}`);
   };
 
-  const joinMeeting = (e: React.FormEvent) => {
+  const joinMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
       router.push('/login');
       return;
     }
-    if (meetingCode.trim()) {
-      router.push(`/meeting/${meetingCode.trim()}`);
+    const code = meetingCode.trim();
+    if (code) {
+      const meetingRef = ref(db, `meetings/${code}`);
+      const snapshot = await get(meetingRef);
+      if (snapshot.exists()) {
+        router.push(`/meeting/${code}`);
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Meeting not found',
+          description: 'Please check the code and try again.',
+        });
+      }
     }
   };
 
@@ -55,7 +70,7 @@ export default function Home() {
                 onChange={(e) => setMeetingCode(e.target.value)}
                 className="h-12 rounded-full pl-10 pr-24 sm:pr-28 bg-card border-border text-base"
               />
-              <Button type="submit" variant="link" disabled={!meetingCode.trim()} className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/80 text-lg font-medium hover:text-primary no-underline hover:no-underline disabled:no-underline">
+              <Button type="submit" variant="link" disabled={!meetingCode.trim()} className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/80 text-lg font-medium hover:text-primary no-underline hover:no-underline disabled:no-underline disabled:text-muted-foreground/50">
                 Join
               </Button>
             </form>

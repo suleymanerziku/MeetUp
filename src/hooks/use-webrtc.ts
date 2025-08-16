@@ -1,6 +1,6 @@
 // src/hooks/use-webrtc.ts
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { ref, onValue, set, onDisconnect, child, remove, serverTimestamp, get, push as firebasePush } from 'firebase/database';
+import { ref, onValue, set, onDisconnect, child, remove, serverTimestamp, get, push as firebasePush, goOffline, goOnline } from 'firebase/database';
 import { db } from '@/lib/firebase';
 import { useAuth } from './use-auth.tsx';
 
@@ -40,27 +40,23 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
   const localStreamRef = useRef(localStream);
 
   useEffect(() => {
-    if (localStream && localStream !== localStreamRef.current) {
+    localStreamRef.current = localStream;
+    if (localStream) {
         Object.values(peerConnections.current).forEach(pc => {
-            const senders = pc.getSenders();
-            senders.forEach(sender => {
-                if (sender.track?.kind === 'video') {
-                    const videoTrack = localStream.getVideoTracks()[0];
-                    if (videoTrack) {
-                        sender.replaceTrack(videoTrack);
-                    }
+            localStream.getTracks().forEach(track => {
+                const sender = pc.getSenders().find(s => s.track?.kind === track.kind);
+                if(sender) {
+                    sender.replaceTrack(track);
+                } else {
+                    pc.addTrack(track, localStream);
                 }
-            });
+            })
         });
     }
-    localStreamRef.current = localStream;
 }, [localStream]);
 
-  const handleNewParticipant = useCallback(async (participantId: string, name: string) => {
-    if (!user || participantId === user.uid || !localStreamRef.current) return;
-
-    if (peerConnections.current[participantId]) {
-      // Connection already exists
+  const handleNewParticipant = useCallback(async (participantId: string, participantName: string) => {
+    if (!user || participantId === user.uid || !localStreamRef.current || peerConnections.current[participantId]) {
       return;
     }
     
@@ -76,25 +72,27 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
         )
       );
     };
-
+    
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        const iceCandidateRef = ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates/${participantId}`);
+        const candidatePushRef = firebasePush(child(iceCandidateRef, event.candidate.sdpMid!));
+        set(candidatePushRef, event.candidate.toJSON());
+      }
+    };
+    
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     
     const offerRef = ref(db, `meetings/${meetingId}/users/${user.uid}/offers/${participantId}`);
     await set(offerRef, { type: 'offer', sdp: pc.localDescription?.sdp });
-    
-    const iceCandidateRef = ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates/${participantId}`);
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        const candidatePushRef = firebasePush(child(iceCandidateRef, event.candidate.sdpMid!));
-        set(candidatePushRef, event.candidate.toJSON());
-      }
-    };
 
   }, [user, meetingId]);
 
   useEffect(() => {
     if (!user || !meetingId) return;
+
+    goOnline(db);
 
     const userRef = ref(db, `meetings/${meetingId}/users/${user.uid}`);
     const presenceRef = ref(db, `.info/connected`);
@@ -102,17 +100,13 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
     const hostRef = ref(db, `meetings/${meetingId}/host`);
 
     const setup = async () => {
-      // Check if a host is already set
       const hostSnapshot = await get(hostRef);
-      const hostId = hostSnapshot.val();
-      
-      if (!hostId) {
-        // If no host, the current user becomes the host.
+      if (!hostSnapshot.exists()) {
         await set(hostRef, user.uid);
         setIsHost(true);
+        onDisconnect(hostRef).remove();
       } else {
-        // If a host exists, check if it's the current user.
-        setIsHost(hostId === user.uid);
+        setIsHost(hostSnapshot.val() === user.uid);
       }
     };
     setup();
@@ -126,67 +120,71 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
       if (snap.val() === true) {
         set(userRef, { name: user.displayName || "Anonymous", email: user.email, online: true, id: user.uid, isMuted: false, isCameraOff: false, isSharingScreen: false });
         onDisconnect(userRef).remove();
-        onDisconnect(hostRef).get().then(snapshot => {
-            if (snapshot.val() === user.uid) {
-                remove(hostRef);
-            }
-        });
       }
     });
 
     const unSubUsers = onValue(usersRef, (snapshot) => {
       const usersData = snapshot.val();
+      const otherUsers: Participant[] = [];
       if (usersData) {
-        const otherUsers = Object.keys(usersData)
-          .filter(uid => uid !== user.uid && usersData[uid].online)
-          .map(uid => ({
-            id: uid,
-            name: usersData[uid].name,
-            email: usersData[uid].email,
-            isMuted: usersData[uid].isMuted || false,
-            isCameraOff: usersData[uid].isCameraOff || false,
-            isSharingScreen: usersData[uid].isSharingScreen || false,
-          }));
-        
-        setParticipants(currentParticipants => {
-            const newParticipantIds = new Set(otherUsers.map(u => u.id));
-            const oldParticipantIds = new Set(currentParticipants.map(p => p.id));
-            
-            const updatedParticipants = otherUsers.map(newUser => {
-                const existingParticipant = currentParticipants.find(p => p.id === newUser.id);
-                return existingParticipant ? { ...existingParticipant, ...newUser } : newUser;
-            });
+          for(const uid in usersData) {
+              if (uid !== user.uid && usersData[uid].online) {
+                  otherUsers.push({
+                      id: uid,
+                      name: usersData[uid].name,
+                      email: usersData[uid].email,
+                      isMuted: usersData[uid].isMuted || false,
+                      isCameraOff: usersData[uid].isCameraOff || false,
+                      isSharingScreen: usersData[uid].isSharingScreen || false,
+                  });
+              }
+          }
+      }
 
-            // New users
-            otherUsers.forEach(p => {
-                if(!oldParticipantIds.has(p.id)) {
-                  handleNewParticipant(p.id, p.name);
-                }
-            });
-  
-            // Users who left
-            currentParticipants.forEach(p => {
-               if (!newParticipantIds.has(p.id) && peerConnections.current[p.id]) {
-                  peerConnections.current[p.id].close();
-                  delete peerConnections.current[p.id];
-               }
-            });
-            return updatedParticipants;
+      setParticipants(currentParticipants => {
+          const newParticipantIds = new Set(otherUsers.map(u => u.id));
+          const oldParticipantIds = new Set(currentParticipants.map(p => p.id));
+          
+          let updatedParticipants = currentParticipants.filter(p => newParticipantIds.has(p.id));
+
+          otherUsers.forEach(newUser => {
+              const existingParticipant = updatedParticipants.find(p => p.id === newUser.id);
+              if (existingParticipant) {
+                  Object.assign(existingParticipant, newUser);
+              } else {
+                  updatedParticipants.push(newUser);
+              }
           });
 
-      } else {
-        setParticipants([]);
-      }
+          // New users
+          otherUsers.forEach(p => {
+              if(!oldParticipantIds.has(p.id)) {
+                handleNewParticipant(p.id, p.name);
+              }
+          });
+
+          // Users who left
+          currentParticipants.forEach(p => {
+             if (!newParticipantIds.has(p.id) && peerConnections.current[p.id]) {
+                peerConnections.current[p.id].close();
+                delete peerConnections.current[p.id];
+             }
+          });
+          return updatedParticipants;
+        });
+
     });
 
     const unSubOffers = onValue(ref(db, `meetings/${meetingId}/users/${user.uid}/offers`), async (snapshot) => {
+      if(!snapshot.exists()) return;
+
       const offers = snapshot.val();
-      if(!offers || !localStreamRef.current) return;
       for (const fromId in offers) {
-        if(!user) continue;
+        if(!user || !localStreamRef.current) continue;
 
         const { sdp, type } = offers[fromId];
         let pc = peerConnections.current[fromId];
+
         if (!pc) {
           pc = new RTCPeerConnection(ICE_SERVERS);
           peerConnections.current[fromId] = pc;
@@ -198,76 +196,86 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
                )
              );
           };
-          const iceCandidateRef = ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates/${fromId}`);
           pc.onicecandidate = (event) => {
             if (event.candidate) {
+              const iceCandidateRef = ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates/${fromId}`);
               const candidatePushRef = firebasePush(child(iceCandidateRef, event.candidate.sdpMid!));
               set(candidatePushRef, event.candidate.toJSON());
             }
           };
         }
 
+        await pc.setRemoteDescription(new RTCSessionDescription({ type, sdp }));
+        
         if (type === 'offer') {
-          await pc.setRemoteDescription(new RTCSessionDescription({ type, sdp }));
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           const answerRef = ref(db, `meetings/${meetingId}/users/${fromId}/offers/${user.uid}`);
           await set(answerRef, { type: 'answer', sdp: pc.localDescription?.sdp });
-        } else if (type === 'answer') {
-          await pc.setRemoteDescription(new RTCSessionDescription({ type, sdp }));
         }
+        
         remove(ref(db, `meetings/${meetingId}/users/${user.uid}/offers/${fromId}`));
       }
     });
     
     const unSubIce = onValue(ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates`), async (snapshot) => {
+      if(!snapshot.exists()) return;
       const candidatesByPeer = snapshot.val();
-      if (candidatesByPeer) {
-        for (const peerId in candidatesByPeer) {
+      for (const peerId in candidatesByPeer) {
+        const pc = peerConnections.current[peerId];
+        if (pc && pc.remoteDescription) {
           const candidatesBySdpMid = candidatesByPeer[peerId];
-          const pc = peerConnections.current[peerId];
-          if (pc && pc.remoteDescription) {
-            for (const sdpMid in candidatesBySdpMid) {
-              const candidates = candidatesBySdpMid[sdpMid];
-              for(const key in candidates) {
-                try {
-                  await pc.addIceCandidate(new RTCIceCandidate(candidates[key]));
-                } catch(e){
-                  console.error("Error adding received ICE candidate", e);
-                }
+          for (const sdpMid in candidatesBySdpMid) {
+            const candidates = candidatesBySdpMid[sdpMid];
+            for(const key in candidates) {
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidates[key]));
+              } catch(e){
+                console.error("Error adding received ICE candidate", e);
               }
             }
-            remove(ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates/${peerId}`));
           }
+          remove(ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates/${peerId}`));
         }
       }
     });
 
     return () => {
+      if (user) {
+        const userRef = ref(db, `meetings/${meetingId}/users/${user.uid}`);
+        remove(userRef);
+      }
+      Object.values(peerConnections.current).forEach(pc => pc.close());
+      peerConnections.current = {};
+      setParticipants([]);
+      goOffline(db);
+      
       onHostChange();
       onPresenceChange();
       unSubUsers();
       unSubOffers();
       unSubIce();
-      if (userRef) remove(userRef);
-      Object.values(peerConnections.current).forEach(pc => pc.close());
-      peerConnections.current = {};
-      setParticipants([]);
     };
   }, [user, meetingId, handleNewParticipant]);
 
-  const toggleMedia = (kind: 'audio' | 'video') => {
+  const toggleMedia = (kind: 'audio' | 'video' | 'screen') => {
     const userRef = ref(db, `meetings/${meetingId}/users/${user?.uid}`);
-    if (localStreamRef.current && (kind === 'audio' || kind === 'video')) {
-      const track = kind === 'audio' ? localStreamRef.current.getAudioTracks()[0] : localStreamRef.current.getVideoTracks()[0];
-      if (track) {
-        track.enabled = !track.enabled;
-        if(kind === 'audio'){
-            set(child(userRef, 'isMuted'), !track.enabled);
-        } else {
-            set(child(userRef, 'isCameraOff'), !track.enabled);
+    if (kind === 'audio' || kind === 'video') {
+        if(localStreamRef.current){
+            const track = kind === 'audio' ? localStreamRef.current.getAudioTracks()[0] : localStreamRef.current.getVideoTracks()[0];
+            if (track) {
+                track.enabled = !track.enabled;
+                if(kind === 'audio'){
+                    set(child(userRef, 'isMuted'), !track.enabled);
+                } else {
+                    set(child(userRef, 'isCameraOff'), !track.enabled);
+                }
+            }
         }
-      }
+    } else if (kind === 'screen') {
+        get(child(userRef, 'isSharingScreen')).then(snapshot => {
+            set(child(userRef, 'isSharingScreen'), !snapshot.val());
+        });
     }
   };
 
@@ -288,10 +296,9 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
     }
     Object.values(peerConnections.current).forEach(pc => pc.close());
     peerConnections.current = {};
+    goOffline(db);
   }, [user, meetingId]);
 
 
   return { participants, toggleMedia, isHost, chatRef, listenForMessages, cleanup };
 }
-
-    
