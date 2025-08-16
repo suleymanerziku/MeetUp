@@ -101,22 +101,17 @@ export default function MeetingPage() {
   }
 
   const onCameraToggle = async () => {
-    if (isCameraOn) {
-        localStream?.getVideoTracks().forEach(track => track.stop());
-        toggleMedia('video');
-        setIsCameraOn(false);
-    } else {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            const videoTrack = stream.getVideoTracks()[0];
-            localStream?.addTrack(videoTrack);
-            toggleMedia('video');
-            setIsCameraOn(true);
-        } catch (error) {
-            console.error("Error getting camera", error);
+    setIsCameraOn(prev => {
+        const newIsCameraOn = !prev;
+        if(localStream){
+            localStream.getVideoTracks().forEach(track => {
+                track.enabled = newIsCameraOn;
+            });
         }
-    }
-  };
+        toggleMedia('video');
+        return newIsCameraOn;
+    });
+};
 
 
   const handleScreenShareToggle = async () => {
@@ -176,8 +171,8 @@ export default function MeetingPage() {
 
   return (
     <div className="flex h-screen flex-col bg-card text-card-foreground">
-      <header className="p-4 flex justify-between items-center border-b">
-        <h1 className="text-xl font-bold font-headline">Meeting: {meetingId}</h1>
+      <header className="p-2 sm:p-4 flex justify-between items-center border-b">
+        <h1 className="text-lg sm:text-xl font-bold font-headline truncate">Meeting: {meetingId}</h1>
       </header>
       <main className="flex-1 flex overflow-hidden">
         <div className="flex-1 flex flex-col relative">
@@ -201,7 +196,7 @@ export default function MeetingPage() {
             />
           </div>
           
-          <div className="absolute bottom-0 left-0 w-full p-4 flex justify-center items-center z-10">
+          <div className="absolute bottom-0 left-0 w-full p-2 sm:p-4 flex justify-center items-center z-10">
             <MeetingControls
               isMicOn={isMicOn}
               isCameraOn={isCameraOn}

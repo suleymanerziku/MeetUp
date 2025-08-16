@@ -22,9 +22,27 @@ type VideoGridProps = {
 
 export function VideoGrid({ localStream, participants, isLocalCameraOn, isLocalSharingScreen, userBackground }: VideoGridProps) {
   const { user } = useAuth();
+  const totalParticipants = 1 + participants.length;
+  
+  const gridClasses = () => {
+    switch (totalParticipants) {
+      case 1:
+        return 'grid-cols-1';
+      case 2:
+        return 'grid-cols-1 sm:grid-cols-2';
+      case 3:
+      case 4:
+        return 'grid-cols-2';
+      case 5:
+      case 6:
+        return 'grid-cols-2 sm:grid-cols-3';
+      default:
+        return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4';
+    }
+  }
 
   return (
-    <div className="flex-1 p-2 sm:p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4 auto-rows-min overflow-auto">
+    <div className={`flex-1 p-2 sm:p-4 grid ${gridClasses()} gap-2 sm:gap-4 auto-rows-min overflow-auto`}>
       {user && (
         <ParticipantCard
           name={user.displayName || "You"}
@@ -35,7 +53,6 @@ export function VideoGrid({ localStream, participants, isLocalCameraOn, isLocalS
           background={userBackground}
           stream={localStream || undefined}
           dataAiHint="person video call"
-          className="sm:col-span-2 sm:row-span-2"
         />
       )}
       {participants.map((p) => (
