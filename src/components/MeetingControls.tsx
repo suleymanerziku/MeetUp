@@ -2,14 +2,13 @@
 "use client";
 
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, Users, Wand2, PhoneOff, MessageSquare, ScreenShareOff } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, Users, Wand2, PhoneOff, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type MeetingControlsProps = {
   isMicOn: boolean;
   isCameraOn: boolean;
   isSharingScreen: boolean;
-  canOthersShare: boolean;
   isHost: boolean;
   onMicToggle: () => void;
   onCameraToggle: () => void;
@@ -18,14 +17,12 @@ type MeetingControlsProps = {
   onChatToggle: () => void;
   onAIGeneratorToggle: () => void;
   onEndCall: () => void;
-  onToggleOthersCanShare: () => void;
 };
 
 export function MeetingControls({
   isMicOn,
   isCameraOn,
   isSharingScreen,
-  canOthersShare,
   isHost,
   onMicToggle,
   onCameraToggle,
@@ -34,7 +31,6 @@ export function MeetingControls({
   onChatToggle,
   onAIGeneratorToggle,
   onEndCall,
-  onToggleOthersCanShare,
 }: MeetingControlsProps) {
 
   const controlButtonClasses = "rounded-full w-14 h-14 transition-all duration-300 ease-in-out transform hover:scale-110";
@@ -79,18 +75,6 @@ export function MeetingControls({
           <Wand2 className="h-6 w-6 text-accent-foreground" />
         </Button>
         
-        {isHost && (
-            <Button 
-                variant={canOthersShare ? 'secondary' : 'destructive'} 
-                size="icon" 
-                className={cn(controlButtonClasses)}
-                onClick={onToggleOthersCanShare}
-                aria-label={canOthersShare ? "Disable others' screen share" : "Enable others' screen share"}
-            >
-              {canOthersShare ? <ScreenShare className="h-6 w-6" /> : <ScreenShareOff className="h-6 w-6" />}
-            </Button>
-        )}
-
         <div className="w-px h-8 bg-border mx-2"></div>
         <Button variant="destructive" size="icon" className="rounded-full w-16 h-14" onClick={onEndCall} aria-label="End call">
           <PhoneOff className="h-6 w-6" />

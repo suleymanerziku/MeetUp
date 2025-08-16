@@ -33,7 +33,6 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
   const { user } = useAuth();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [isHost, setIsHost] = useState(false);
-  const [canOthersShare, setCanOthersShare] = useState(false);
   
   const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
   const meetingRef = ref(db, `meetings/${meetingId}`);
@@ -88,7 +87,6 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
     const presenceRef = ref(db, `.info/connected`);
     const usersRef = ref(db, `meetings/${meetingId}/users`);
     const hostRef = ref(db, `meetings/${meetingId}/host`);
-    const screenSharePolicyRef = ref(db, `meetings/${meetingId}/config/canOthersShare`);
 
     const setup = async () => {
       // Check if a host is already set
@@ -99,9 +97,6 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
         // If no host, the current user becomes the host.
         await set(hostRef, user.uid);
         setIsHost(true);
-        // By default, a new host allows others to share.
-        await set(screenSharePolicyRef, true); 
-        setCanOthersShare(true);
       } else {
         // If a host exists, check if it's the current user.
         setIsHost(hostId === user.uid);
@@ -112,11 +107,6 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
     const onHostChange = onValue(hostRef, (snapshot) => {
         const hostId = snapshot.val();
         setIsHost(hostId === user.uid);
-    });
-
-    const onScreenSharePolicyChange = onValue(screenSharePolicyRef, (snapshot) => {
-        // Use ?? false to handle cases where the value might be null initially.
-        setCanOthersShare(snapshot.val() ?? false);
     });
 
     const onPresenceChange = onValue(presenceRef, (snap) => {
@@ -232,7 +222,6 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
 
     return () => {
       onHostChange();
-      onScreenSharePolicyChange();
       onPresenceChange();
       unSubUsers();
       unSubOffers();
@@ -262,14 +251,6 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
     }
   };
 
-  const toggleOthersCanShare = () => {
-      if (isHost) {
-          const newPolicy = !canOthersShare;
-          set(ref(db, `meetings/${meetingId}/config/canOthersShare`), newPolicy);
-          setCanOthersShare(newPolicy);
-      }
-  }
-
   const listenForMessages = useCallback((callback: (messages: Message[]) => void) => {
     const messagesRef = ref(db, `meetings/${meetingId}/chat`);
     return onValue(messagesRef, (snapshot) => {
@@ -290,5 +271,5 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
   }, [user, meetingId]);
 
 
-  return { participants, toggleMedia, isHost, canOthersShare, toggleOthersCanShare, chatRef, listenForMessages, cleanup };
+  return { participants, toggleMedia, isHost, chatRef, listenForMessages, cleanup };
 }

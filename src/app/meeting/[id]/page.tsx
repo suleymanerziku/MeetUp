@@ -38,7 +38,7 @@ export default function MeetingPage() {
   const pathname = usePathname();
   const meetingId = pathname.split('/').pop()!;
   
-  const { participants, toggleMedia, isHost, canOthersShare, toggleOthersCanShare, chatRef, listenForMessages, cleanup } = useWebRTC(meetingId, isSharingScreen ? screenStream : localStream);
+  const { participants, toggleMedia, isHost, chatRef, listenForMessages, cleanup } = useWebRTC(meetingId, isSharingScreen ? screenStream : localStream);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -98,10 +98,6 @@ export default function MeetingPage() {
       setIsSharingScreen(false);
       toggleMedia('screen', false);
     } else {
-        if (!isHost && !canOthersShare) {
-            toast({ variant: 'destructive', title: 'Screen sharing is disabled by the host.'});
-            return;
-        }
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         setScreenStream(stream);
@@ -167,7 +163,6 @@ export default function MeetingPage() {
             isMicOn={isMicOn}
             isCameraOn={isCameraOn}
             isSharingScreen={isSharingScreen}
-            canOthersShare={canOthersShare}
             isHost={isHost}
             onMicToggle={onMicToggle}
             onCameraToggle={onCameraToggle}
@@ -176,7 +171,6 @@ export default function MeetingPage() {
             onChatToggle={() => setIsChatOpen(p => !p)}
             onAIGeneratorToggle={() => setIsAIGeneratorOpen(p => !p)}
             onEndCall={handleLeaveMeeting}
-            onToggleOthersCanShare={toggleOthersCanShare}
           />
         </div>
         <ParticipantList 
