@@ -55,7 +55,7 @@ export default function Home() {
                 onChange={(e) => setMeetingCode(e.target.value)}
                 className="h-12 rounded-full pl-10 pr-28 bg-card border-border"
               />
-              <Button type="submit" variant="link" disabled={!meetingCode.trim()} className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/80 text-lg font-medium hover:text-primary">
+              <Button type="submit" variant="link" disabled={!meetingCode.trim()} className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/80 text-lg font-medium hover:text-primary no-underline hover:no-underline">
                 Join
               </Button>
             </form>
