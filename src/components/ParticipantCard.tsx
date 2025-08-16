@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 
 type ParticipantCardProps = {
   name: string;
+  email?: string; // Add email to props
   isMuted?: boolean;
   isCameraOff?: boolean;
   isCurrentUser?: boolean;
@@ -21,6 +22,7 @@ type ParticipantCardProps = {
 
 export function ParticipantCard({
   name,
+  email,
   isMuted = false,
   isCameraOff = false,
   isCurrentUser = false,
@@ -55,7 +57,7 @@ export function ParticipantCard({
       {showAvatar && (
         <div className="z-10 flex flex-col items-center gap-2 text-muted-foreground">
           <Avatar className="w-16 h-16 sm:w-24 sm:h-24 border-2 border-background">
-            <AvatarImage src={`https://i.pravatar.cc/150?u=${name}`} alt={name} />
+            <AvatarImage src={`https://i.pravatar.cc/150?u=${email || name}`} alt={name} />
             <AvatarFallback>
               <User className="w-8 h-8 sm:w-12 sm:h-12" />
             </AvatarFallback>

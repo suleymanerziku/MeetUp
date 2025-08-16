@@ -5,6 +5,7 @@ import { ParticipantCard } from './ParticipantCard';
 interface Participant {
   id: string;
   name: string;
+  email?: string;
   stream?: MediaStream;
   isMuted: boolean;
   isCameraOff: boolean;
@@ -25,6 +26,7 @@ export function VideoGrid({ localStream, participants, isLocalCameraOn, userBack
       {user && (
         <ParticipantCard
           name={user.displayName || "You"}
+          email={user.email || undefined}
           isCurrentUser={true}
           isCameraOff={!isLocalCameraOn}
           background={userBackground}
@@ -37,6 +39,7 @@ export function VideoGrid({ localStream, participants, isLocalCameraOn, userBack
         <ParticipantCard
           key={p.id}
           name={p.name}
+          email={p.email}
           isMuted={p.isMuted}
           isCameraOff={p.isCameraOff}
           stream={p.stream}

@@ -7,6 +7,7 @@ import { useAuth } from './use-auth.tsx';
 interface Participant {
   id: string;
   name: string;
+  email?: string;
   stream?: MediaStream;
   isMuted: boolean;
   isCameraOff: boolean;
@@ -73,7 +74,7 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
 
     onValue(presenceRef, (snap) => {
       if (snap.val() === true) {
-        set(userRef, { name: user.displayName || "Anonymous", online: true, id: user.uid });
+        set(userRef, { name: user.displayName || "Anonymous", email: user.email, online: true, id: user.uid });
         onDisconnect(userRef).remove();
       }
     });
@@ -86,6 +87,7 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
           .map(uid => ({
             id: uid,
             name: usersData[uid].name,
+            email: usersData[uid].email,
             isMuted: usersData[uid].isMuted || false,
             isCameraOff: usersData[uid].isCameraOff || false,
           }));

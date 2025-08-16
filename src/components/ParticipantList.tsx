@@ -5,6 +5,7 @@ import { Mic, MicOff, Video, VideoOff, User } from 'lucide-react';
 
 type Participant = {
     name: string;
+    email?: string;
     isMuted: boolean;
     isCameraOn: boolean;
 }
@@ -27,7 +28,7 @@ export function ParticipantList({ open, onOpenChange, participants }: Participan
             <div key={p.name} className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Avatar>
-                  <AvatarImage src={`https://i.pravatar.cc/150?u=${p.name}`} />
+                  <AvatarImage src={`https://i.pravatar.cc/150?u=${p.email || p.name}`} />
                   <AvatarFallback><User /></AvatarFallback>
                 </Avatar>
                 <span className="font-medium">{p.name}</span>

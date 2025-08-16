@@ -100,9 +100,12 @@ export default function MeetingPage() {
             onAIGeneratorToggle={() => setIsAIGeneratorOpen(p => !p)}
           />
         </div>
-        <ParticipantList open={isParticipantsOpen} onOpenChange={setIsParticipantsOpen} participants={[
-            { name: user.displayName || 'You', isMuted: !isMicOn, isCameraOn: isCameraOn },
-            ...participants.map(p => ({name: p.name, isMuted: p.isMuted, isCameraOn: !p.isCameraOff}))
+        <ParticipantList 
+          open={isParticipantsOpen} 
+          onOpenChange={setIsParticipantsOpen} 
+          participants={[
+            { name: user.displayName || 'You', email: user.email || undefined, isMuted: !isMicOn, isCameraOn: isCameraOn },
+            ...participants.map(p => ({name: p.name, email: p.email, isMuted: p.isMuted, isCameraOn: !p.isCameraOff}))
         ]}/>
       </main>
       <AIGenerateBackground 
