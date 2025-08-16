@@ -38,7 +38,8 @@ export default function MeetingPage() {
   const pathname = usePathname();
   const meetingId = pathname.split('/').pop()!;
   
-  const { participants, toggleMedia, isHost, chatRef, listenForMessages, cleanup } = useWebRTC(meetingId, isSharingScreen ? screenStream : localStream);
+  const currentStream = isSharingScreen ? screenStream : localStream;
+  const { participants, toggleMedia, isHost, chatRef, listenForMessages, cleanup } = useWebRTC(meetingId, currentStream);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -96,17 +97,15 @@ export default function MeetingPage() {
       screenStream?.getTracks().forEach(track => track.stop());
       setScreenStream(null);
       setIsSharingScreen(false);
-      toggleMedia('screen', false);
+      
     } else {
       try {
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         setScreenStream(stream);
         setIsSharingScreen(true);
-        toggleMedia('screen', true);
         stream.getVideoTracks()[0].onended = () => {
             setIsSharingScreen(false);
             setScreenStream(null);
-            toggleMedia('screen', false);
         };
       } catch (err) {
         console.error("Error sharing screen:", err);
@@ -152,47 +151,33 @@ export default function MeetingPage() {
               </Alert>
             </div>
           )}
-          <VideoGrid 
-            localStream={isSharingScreen ? screenStream : localStream}
-            participants={participants}
-            isLocalCameraOn={isCameraOn} 
-            isLocalSharingScreen={isSharingScreen}
-            userBackground={background} 
-          />
-          <MeetingControls
-            isMicOn={isMicOn}
-            isCameraOn={isCameraOn}
-            isSharingScreen={isSharingScreen}
-            isHost={isHost}
-            onMicToggle={onMicToggle}
-            onCameraToggle={onCameraToggle}
-            onScreenShareToggle={handleScreenShareToggle}
-            onParticipantsToggle={() => setIsParticipantsOpen(p => !p)}
-            onChatToggle={() => setIsChatOpen(p => !p)}
-            onAIGeneratorToggle={() => setIsAIGeneratorOpen(p => !p)}
-            onEndCall={handleLeaveMeeting}
-          />
+          <div className="h-full relative">
+            <video ref={videoRef} muted autoPlay className="absolute w-full h-full object-cover z-0" style={{ filter: background ? `url(#${background})` : 'none' }} />
+            <VideoGrid participants={participants} meetingId={meetingId} />
+          </div>
+          
+          <div className="absolute bottom-0 left-0 w-full p-4 flex justify-center items-center z-10">
+            <MeetingControls
+              isMicOn={isMicOn}
+              isCameraOn={isCameraOn}
+              isSharingScreen={isSharingScreen}
+              onMicToggle={onMicToggle}
+              onCameraToggle={onCameraToggle}
+              onScreenShareToggle={handleScreenShareToggle}
+              onLeaveMeeting={handleLeaveMeeting}
+              onParticipantsToggle={() => setIsParticipantsOpen(prev => !prev)}
+              onChatToggle={() => setIsChatOpen(prev => !prev)}
+              onAIGeneratorToggle={() => setIsAIGeneratorOpen(prev => !prev)}
+            />
+          </div>
         </div>
-        <ParticipantList 
-          open={isParticipantsOpen} 
-          onOpenChange={setIsParticipantsOpen} 
-          participants={[
-            { name: user.displayName || 'You', email: user.email || undefined, isMuted: !isMicOn, isCameraOn: isCameraOn },
-            ...participants.map(p => ({name: p.name, email: p.email, isMuted: p.isMuted, isCameraOn: !p.isCameraOff}))
-        ]}/>
-        <Chat
-            open={isChatOpen}
-            onOpenChange={setIsChatOpen}
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            currentUser={user}
-        />
+
+        <ParticipantList isOpen={isParticipantsOpen} onClose={() => setIsParticipantsOpen(false)} participants={participants} />
+        <Chat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} messages={messages} onSendMessage={handleSendMessage} />
+        <AIGenerateBackground isOpen={isAIGeneratorOpen} onClose={() => setIsAIGeneratorOpen(false)} setBackground={setBackground} />
       </main>
-      <AIGenerateBackground 
-        open={isAIGeneratorOpen} 
-        onOpenChange={setIsAIGeneratorOpen}
-        onBackgroundGenerated={setBackground} 
-      />
     </div>
   );
 }
+
+    

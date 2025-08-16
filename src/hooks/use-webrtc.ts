@@ -40,8 +40,21 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
   const localStreamRef = useRef(localStream);
 
   useEffect(() => {
+    if (localStream && localStream !== localStreamRef.current) {
+        Object.values(peerConnections.current).forEach(pc => {
+            const senders = pc.getSenders();
+            senders.forEach(sender => {
+                if (sender.track?.kind === 'video') {
+                    const videoTrack = localStream.getVideoTracks()[0];
+                    if (videoTrack) {
+                        sender.replaceTrack(videoTrack);
+                    }
+                }
+            });
+        });
+    }
     localStreamRef.current = localStream;
-  }, [localStream]);
+}, [localStream]);
 
   const handleNewParticipant = useCallback(async (participantId: string, name: string) => {
     if (!user || participantId === user.uid || !localStreamRef.current) return;
@@ -73,8 +86,8 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
     const iceCandidateRef = ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates/${participantId}`);
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        const candidateRef = child(iceCandidateRef, event.candidate.sdpMid!);
-        firebasePush(candidateRef, event.candidate.toJSON());
+        const candidatePushRef = firebasePush(child(iceCandidateRef, event.candidate.sdpMid!));
+        set(candidatePushRef, event.candidate.toJSON());
       }
     };
 
@@ -136,25 +149,31 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
           }));
         
         setParticipants(currentParticipants => {
-          const newParticipantIds = new Set(otherUsers.map(u => u.id));
-          const oldParticipantIds = new Set(currentParticipants.map(p => p.id));
-          
-          // New users
-          otherUsers.forEach(p => {
-              if(!oldParticipantIds.has(p.id)) {
-                handleNewParticipant(p.id, p.name);
-              }
+            const newParticipantIds = new Set(otherUsers.map(u => u.id));
+            const oldParticipantIds = new Set(currentParticipants.map(p => p.id));
+            
+            const updatedParticipants = otherUsers.map(newUser => {
+                const existingParticipant = currentParticipants.find(p => p.id === newUser.id);
+                return existingParticipant ? { ...existingParticipant, ...newUser } : newUser;
+            });
+
+            // New users
+            otherUsers.forEach(p => {
+                if(!oldParticipantIds.has(p.id)) {
+                  handleNewParticipant(p.id, p.name);
+                }
+            });
+  
+            // Users who left
+            currentParticipants.forEach(p => {
+               if (!newParticipantIds.has(p.id) && peerConnections.current[p.id]) {
+                  peerConnections.current[p.id].close();
+                  delete peerConnections.current[p.id];
+               }
+            });
+            return updatedParticipants;
           });
 
-          // Users who left
-          currentParticipants.forEach(p => {
-             if (!newParticipantIds.has(p.id) && peerConnections.current[p.id]) {
-                peerConnections.current[p.id].close();
-                delete peerConnections.current[p.id];
-             }
-          });
-          return otherUsers;
-        });
       } else {
         setParticipants([]);
       }
@@ -167,8 +186,9 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
         if(!user) continue;
 
         const { sdp, type } = offers[fromId];
-        const pc = peerConnections.current[fromId] || new RTCPeerConnection(ICE_SERVERS);
-        if (!peerConnections.current[fromId]) {
+        let pc = peerConnections.current[fromId];
+        if (!pc) {
+          pc = new RTCPeerConnection(ICE_SERVERS);
           peerConnections.current[fromId] = pc;
           localStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current!));
           pc.ontrack = (event) => {
@@ -181,8 +201,8 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
           const iceCandidateRef = ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates/${fromId}`);
           pc.onicecandidate = (event) => {
             if (event.candidate) {
-              const candidateRef = child(iceCandidateRef, event.candidate.sdpMid!);
-              firebasePush(candidateRef, event.candidate.toJSON());
+              const candidatePushRef = firebasePush(child(iceCandidateRef, event.candidate.sdpMid!));
+              set(candidatePushRef, event.candidate.toJSON());
             }
           };
         }
@@ -204,14 +224,17 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
       const candidatesByPeer = snapshot.val();
       if (candidatesByPeer) {
         for (const peerId in candidatesByPeer) {
-          const candidates = candidatesByPeer[peerId];
+          const candidatesBySdpMid = candidatesByPeer[peerId];
           const pc = peerConnections.current[peerId];
           if (pc && pc.remoteDescription) {
-            for (const key in candidates) {
-              try {
-                await pc.addIceCandidate(new RTCIceCandidate(candidates[key]));
-              } catch(e){
-                console.error("Error adding received ICE candidate", e);
+            for (const sdpMid in candidatesBySdpMid) {
+              const candidates = candidatesBySdpMid[sdpMid];
+              for(const key in candidates) {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(candidates[key]));
+                } catch(e){
+                  console.error("Error adding received ICE candidate", e);
+                }
               }
             }
             remove(ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates/${peerId}`));
@@ -233,21 +256,18 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
     };
   }, [user, meetingId, handleNewParticipant]);
 
-  const toggleMedia = (kind: 'audio' | 'video' | 'screen', value?: boolean) => {
+  const toggleMedia = (kind: 'audio' | 'video') => {
     const userRef = ref(db, `meetings/${meetingId}/users/${user?.uid}`);
     if (localStreamRef.current && (kind === 'audio' || kind === 'video')) {
       const track = kind === 'audio' ? localStreamRef.current.getAudioTracks()[0] : localStreamRef.current.getVideoTracks()[0];
       if (track) {
-        track.enabled = value !== undefined ? value : !track.enabled;
+        track.enabled = !track.enabled;
         if(kind === 'audio'){
             set(child(userRef, 'isMuted'), !track.enabled);
         } else {
             set(child(userRef, 'isCameraOff'), !track.enabled);
         }
       }
-    }
-    if (kind === 'screen' && user) {
-        set(child(userRef, 'isSharingScreen'), value);
     }
   };
 
@@ -273,3 +293,5 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
 
   return { participants, toggleMedia, isHost, chatRef, listenForMessages, cleanup };
 }
+
+    

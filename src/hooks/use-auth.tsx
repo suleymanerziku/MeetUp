@@ -1,17 +1,17 @@
-// src/hooks/use-auth.tsx
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { 
-  onAuthStateChanged, 
-  User, 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut as firebaseSignOut,
-  updateProfile
-} from 'firebase/auth';
+"use client";
+import { createContext, useContext, useState, useEffect } from 'react';
 import { auth } from '@/lib/firebase';
+import { 
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  updateProfile,
+  User,
+} from "firebase/auth";
 import { useRouter } from 'next/navigation';
 
-interface AuthContextType {
+interface AuthContextProps {
   user: User | null;
   loading: boolean;
   signIn: (email: string, pass: string) => Promise<any>;
@@ -19,9 +19,9 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextProps | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -73,3 +73,5 @@ export function useAuth() {
   }
   return context;
 }
+
+    
