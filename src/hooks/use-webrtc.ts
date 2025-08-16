@@ -1,6 +1,6 @@
 // src/hooks/use-webrtc.ts
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { ref, onValue, set, onDisconnect, child, remove, serverTimestamp, get } from 'firebase/database';
+import { ref, onValue, set, onDisconnect, child, remove, serverTimestamp, get, push as firebasePush } from 'firebase/database';
 import { db } from '@/lib/firebase';
 import { useAuth } from './use-auth.tsx';
 
@@ -74,7 +74,8 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
     const iceCandidateRef = ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates/${participantId}`);
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        set(child(iceCandidateRef, event.candidate.sdpMid!), { ...event.candidate.toJSON() });
+        const candidateRef = child(iceCandidateRef, event.candidate.sdpMid!);
+        firebasePush(candidateRef, event.candidate.toJSON());
       }
     };
 
@@ -90,13 +91,19 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
     const screenSharePolicyRef = ref(db, `meetings/${meetingId}/config/canOthersShare`);
 
     const setup = async () => {
+      // Check if a host is already set
       const hostSnapshot = await get(hostRef);
       const hostId = hostSnapshot.val();
+      
       if (!hostId) {
+        // If no host, the current user becomes the host.
         await set(hostRef, user.uid);
         setIsHost(true);
-        await set(screenSharePolicyRef, true); // Host can share by default
+        // By default, a new host allows others to share.
+        await set(screenSharePolicyRef, true); 
+        setCanOthersShare(true);
       } else {
+        // If a host exists, check if it's the current user.
         setIsHost(hostId === user.uid);
       }
     };
@@ -108,6 +115,7 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
     });
 
     const onScreenSharePolicyChange = onValue(screenSharePolicyRef, (snapshot) => {
+        // Use ?? false to handle cases where the value might be null initially.
         setCanOthersShare(snapshot.val() ?? false);
     });
 
@@ -183,7 +191,8 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
           const iceCandidateRef = ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates/${fromId}`);
           pc.onicecandidate = (event) => {
             if (event.candidate) {
-              set(child(iceCandidateRef, event.candidate.sdpMid!), { ...event.candidate.toJSON() });
+              const candidateRef = child(iceCandidateRef, event.candidate.sdpMid!);
+              firebasePush(candidateRef, event.candidate.toJSON());
             }
           };
         }
@@ -208,9 +217,9 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
           const candidates = candidatesByPeer[peerId];
           const pc = peerConnections.current[peerId];
           if (pc && pc.remoteDescription) {
-            for (const mid in candidates) {
+            for (const key in candidates) {
               try {
-                await pc.addIceCandidate(new RTCIceCandidate(candidates[mid]));
+                await pc.addIceCandidate(new RTCIceCandidate(candidates[key]));
               } catch(e){
                 console.error("Error adding received ICE candidate", e);
               }
@@ -255,7 +264,9 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
 
   const toggleOthersCanShare = () => {
       if (isHost) {
-          set(ref(db, `meetings/${meetingId}/config/canOthersShare`), !canOthersShare);
+          const newPolicy = !canOthersShare;
+          set(ref(db, `meetings/${meetingId}/config/canOthersShare`), newPolicy);
+          setCanOthersShare(newPolicy);
       }
   }
 
