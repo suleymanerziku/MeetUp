@@ -1,9 +1,10 @@
 // src/components/ParticipantList.tsx
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Mic, MicOff, Video, VideoOff, User } from 'lucide-react';
 
 type Participant = {
+    id: string;
     name: string;
     email?: string;
     isMuted: boolean;
@@ -11,23 +12,24 @@ type Participant = {
 }
 
 type ParticipantListProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  isOpen: boolean;
+  onClose: (open: boolean) => void;
   participants: Participant[];
 };
 
-export function ParticipantList({ open, onOpenChange, participants }: ParticipantListProps) {
+export function ParticipantList({ isOpen, onClose, participants }: ParticipantListProps) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent>
         <SheetHeader>
           <SheetTitle className="font-headline">Participants ({participants.length})</SheetTitle>
         </SheetHeader>
         <div className="mt-4 space-y-4">
           {participants.map((p) => (
-            <div key={p.name} className="flex items-center justify-between">
+            <div key={p.id} className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Avatar>
+                  <AvatarImage src={`https://api.dicebear.com/8.x/initials/svg?seed=${p.name}`} />
                   <AvatarFallback><User /></AvatarFallback>
                 </Avatar>
                 <span className="font-medium">{p.name}</span>

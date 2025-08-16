@@ -1,3 +1,4 @@
+
 // src/app/meeting/[id]/page.tsx
 "use client";
 
@@ -53,6 +54,7 @@ export default function MeetingPage() {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         setLocalStream(stream);
+        setIsCameraOn(true);
         if (videoRef.current) {
             videoRef.current.srcObject = stream;
         }
@@ -73,6 +75,17 @@ export default function MeetingPage() {
       stream?.getTracks().forEach(track => track.stop());
     }
   }, [user, toast]);
+  
+   useEffect(() => {
+    if (videoRef.current) {
+        if(isCameraOn && localStream) {
+            videoRef.current.srcObject = localStream;
+        } else {
+            videoRef.current.srcObject = null;
+        }
+    }
+  }, [isCameraOn, localStream]);
+
 
   useEffect(() => {
     if (!chatRef) return;
@@ -87,10 +100,24 @@ export default function MeetingPage() {
     setIsMicOn(prev => !prev);
   }
 
-  const onCameraToggle = () => {
-    toggleMedia('video');
-    setIsCameraOn(prev => !prev);
-  }
+  const onCameraToggle = async () => {
+    if (isCameraOn) {
+        localStream?.getVideoTracks().forEach(track => track.stop());
+        toggleMedia('video');
+        setIsCameraOn(false);
+    } else {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const videoTrack = stream.getVideoTracks()[0];
+            localStream?.addTrack(videoTrack);
+            toggleMedia('video');
+            setIsCameraOn(true);
+        } catch (error) {
+            console.error("Error getting camera", error);
+        }
+    }
+  };
+
 
   const handleScreenShareToggle = async () => {
     if (isSharingScreen) {
@@ -134,6 +161,19 @@ export default function MeetingPage() {
   if (loading) return <div>Loading...</div>;
   if (!user) return null;
   
+  const allParticipants = user ? [
+      {
+        id: user.uid,
+        name: user.displayName || 'You',
+        email: user.email || '',
+        isMuted: !isMicOn,
+        isCameraOn: isCameraOn,
+        isSharingScreen: isSharingScreen
+      },
+      ...participants
+    ] : participants;
+    
+
   return (
     <div className="flex h-screen flex-col bg-card text-card-foreground">
       <header className="p-4 flex justify-between items-center border-b">
@@ -151,9 +191,14 @@ export default function MeetingPage() {
               </Alert>
             </div>
           )}
-          <div className="h-full relative">
-            <video ref={videoRef} muted autoPlay className="absolute w-full h-full object-cover z-0" style={{ filter: background ? `url(#${background})` : 'none' }} />
-            <VideoGrid participants={participants} meetingId={meetingId} />
+          <div className="h-full relative bg-muted">
+            <VideoGrid
+                localStream={currentStream}
+                participants={participants}
+                isLocalCameraOn={isCameraOn}
+                isLocalSharingScreen={isSharingScreen}
+                userBackground={background}
+            />
           </div>
           
           <div className="absolute bottom-0 left-0 w-full p-4 flex justify-center items-center z-10">
@@ -172,12 +217,10 @@ export default function MeetingPage() {
           </div>
         </div>
 
-        <ParticipantList isOpen={isParticipantsOpen} onClose={() => setIsParticipantsOpen(false)} participants={participants} />
-        <Chat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} messages={messages} onSendMessage={handleSendMessage} />
-        <AIGenerateBackground isOpen={isAIGeneratorOpen} onClose={() => setIsAIGeneratorOpen(false)} setBackground={setBackground} />
+        <ParticipantList isOpen={isParticipantsOpen} onClose={() => setIsParticipantsOpen(false)} participants={allParticipants} />
+        <Chat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} messages={messages} onSendMessage={handleSendMessage} currentUser={user}/>
+        <AIGenerateBackground open={isAIGeneratorOpen} onOpenChange={setIsAIGeneratorOpen} onBackgroundGenerated={setBackground} />
       </main>
     </div>
   );
 }
-
-    
