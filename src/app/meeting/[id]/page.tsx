@@ -1,3 +1,4 @@
+// src/app/meeting/[id]/page.tsx
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
@@ -37,9 +38,10 @@ export default function MeetingPage() {
   }, [user, loading, router]);
   
   useEffect(() => {
+    let stream: MediaStream | null = null;
     const getMedia = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         setLocalStream(stream);
         setHasCameraPermission(true);
       } catch (error) {
@@ -53,6 +55,12 @@ export default function MeetingPage() {
       }
     };
     if(user) getMedia();
+
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    }
   }, [user, toast]);
 
   const onMicToggle = () => {
@@ -63,6 +71,13 @@ export default function MeetingPage() {
   const onCameraToggle = () => {
     toggleMedia('video');
     setIsCameraOn(prev => !prev);
+  }
+
+  const handleLeaveMeeting = () => {
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+    }
+    router.push('/');
   }
 
   if (loading) return <div>Loading...</div>;
@@ -98,6 +113,7 @@ export default function MeetingPage() {
             onCameraToggle={onCameraToggle}
             onParticipantsToggle={() => setIsParticipantsOpen(p => !p)}
             onAIGeneratorToggle={() => setIsAIGeneratorOpen(p => !p)}
+            onEndCall={handleLeaveMeeting}
           />
         </div>
         <ParticipantList 

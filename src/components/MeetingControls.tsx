@@ -12,6 +12,7 @@ type MeetingControlsProps = {
   onCameraToggle: () => void;
   onParticipantsToggle: () => void;
   onAIGeneratorToggle: () => void;
+  onEndCall: () => void;
 };
 
 export function MeetingControls({
@@ -21,12 +22,8 @@ export function MeetingControls({
   onCameraToggle,
   onParticipantsToggle,
   onAIGeneratorToggle,
+  onEndCall,
 }: MeetingControlsProps) {
-  const router = useRouter();
-
-  const handleEndCall = () => {
-    router.push('/');
-  };
 
   const controlButtonClasses = "rounded-full w-14 h-14 transition-all duration-300 ease-in-out transform hover:scale-110";
 
@@ -61,7 +58,7 @@ export function MeetingControls({
           <Wand2 className="h-6 w-6 text-accent-foreground" />
         </Button>
         <div className="w-px h-8 bg-border mx-2"></div>
-        <Button variant="destructive" size="icon" className="rounded-full w-16 h-14" onClick={handleEndCall} aria-label="End call">
+        <Button variant="destructive" size="icon" className="rounded-full w-16 h-14" onClick={onEndCall} aria-label="End call">
           <PhoneOff className="h-6 w-6" />
         </Button>
       </div>
