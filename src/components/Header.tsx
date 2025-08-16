@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { LogOut } from 'lucide-react';
+import { LogOut, User } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth.tsx';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -27,8 +27,7 @@ export function Header() {
               <DropdownMenuTrigger asChild>
                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={user.photoURL || `https://i.pravatar.cc/150?u=${user.email}`} alt={user.displayName || 'User'} />
-                    <AvatarFallback>{user.displayName?.charAt(0) || 'U'}</AvatarFallback>
+                    <AvatarFallback><User className="h-4 w-4" /></AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>

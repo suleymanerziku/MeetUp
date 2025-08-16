@@ -4,11 +4,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Send } from 'lucide-react';
+import { User as UserIcon, Send } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { Message } from '@/hooks/use-webrtc';
 import { format } from 'date-fns';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 type ChatProps = {
   open: boolean;
@@ -44,8 +44,9 @@ export function Chat({ open, onOpenChange, messages, onSendMessage, currentUser 
               >
                 {msg.senderId !== currentUser?.uid && (
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={`https://i.pravatar.cc/150?u=${msg.senderId}`} />
-                    <AvatarFallback>{msg.senderName.charAt(0)}</AvatarFallback>
+                     <AvatarFallback>
+                        <UserIcon className="h-4 w-4" />
+                     </AvatarFallback>
                   </Avatar>
                 )}
                 <div className={`flex flex-col ${msg.senderId === currentUser?.uid ? 'items-end' : 'items-start'}`}>
@@ -64,8 +65,9 @@ export function Chat({ open, onOpenChange, messages, onSendMessage, currentUser 
                 </div>
                  {msg.senderId === currentUser?.uid && (
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={`https://i.pravatar.cc/150?u=${msg.senderId}`} />
-                    <AvatarFallback>{msg.senderName.charAt(0)}</AvatarFallback>
+                    <AvatarFallback>
+                        <UserIcon className="h-4 w-4" />
+                    </AvatarFallback>
                   </Avatar>
                 )}
               </div>

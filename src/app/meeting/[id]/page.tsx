@@ -1,7 +1,7 @@
 // src/app/meeting/[id]/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { VideoGrid } from '@/components/VideoGrid';
 import { MeetingControls } from '@/components/MeetingControls';
 import { ParticipantList } from '@/components/ParticipantList';
@@ -12,8 +12,7 @@ import { useWebRTC, Message } from '@/hooks/use-webrtc';
 import { useAuth } from '@/hooks/use-auth.tsx';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { set, ref, onValue, serverTimestamp } from 'firebase/database';
-import { db } from '@/lib/firebase';
+import { push, serverTimestamp } from 'firebase/database';
 
 export default function MeetingPage() {
   const { user, loading } = useAuth();
@@ -23,6 +22,8 @@ export default function MeetingPage() {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCameraOn, setIsCameraOn] = useState(true);
@@ -37,7 +38,7 @@ export default function MeetingPage() {
   const pathname = usePathname();
   const meetingId = pathname.split('/').pop()!;
   
-  const { participants, toggleMedia, isHost, canOthersShare, toggleOthersCanShare, chatRef } = useWebRTC(meetingId, isSharingScreen ? screenStream : localStream);
+  const { participants, toggleMedia, isHost, canOthersShare, toggleOthersCanShare, chatRef, listenForMessages, cleanup } = useWebRTC(meetingId, isSharingScreen ? screenStream : localStream);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -51,6 +52,9 @@ export default function MeetingPage() {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         setLocalStream(stream);
+        if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+        }
         setHasCameraPermission(true);
       } catch (error) {
         console.error('Error accessing media devices.', error);
@@ -71,14 +75,11 @@ export default function MeetingPage() {
 
   useEffect(() => {
     if (!chatRef) return;
-    const unsubscribe = onValue(chatRef, (snapshot) => {
-      const chatData = snapshot.val();
-      const messageList: Message[] = chatData ? Object.values(chatData) : [];
-      messageList.sort((a, b) => a.timestamp - b.timestamp);
-      setMessages(messageList);
+    const unsubscribe = listenForMessages((newMessages) => {
+        setMessages(newMessages);
     });
     return () => unsubscribe();
-  }, [chatRef]);
+  }, [chatRef, listenForMessages]);
 
   const onMicToggle = () => {
     toggleMedia('audio');
@@ -95,6 +96,7 @@ export default function MeetingPage() {
       screenStream?.getTracks().forEach(track => track.stop());
       setScreenStream(null);
       setIsSharingScreen(false);
+      toggleMedia('screen', false);
     } else {
         if (!isHost && !canOthersShare) {
             toast({ variant: 'destructive', title: 'Screen sharing is disabled by the host.'});
@@ -104,9 +106,11 @@ export default function MeetingPage() {
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         setScreenStream(stream);
         setIsSharingScreen(true);
+        toggleMedia('screen', true);
         stream.getVideoTracks()[0].onended = () => {
             setIsSharingScreen(false);
             setScreenStream(null);
+            toggleMedia('screen', false);
         };
       } catch (err) {
         console.error("Error sharing screen:", err);
@@ -116,15 +120,17 @@ export default function MeetingPage() {
 
   const handleSendMessage = (content: string) => {
     if (!user || !chatRef) return;
-    const message: Omit<Message, 'timestamp'> = {
+    const message: Omit<Message, 'timestamp' | 'id'> = {
       senderId: user.uid,
       senderName: user.displayName || 'Anonymous',
       content: content,
     };
-    set(ref(db, `meetings/${meetingId}/chat/${Date.now()}`), {...message, timestamp: serverTimestamp()});
+    const newMessageRef = push(chatRef);
+    push(chatRef, {...message, timestamp: serverTimestamp()});
   };
 
   const handleLeaveMeeting = () => {
+    cleanup();
     localStream?.getTracks().forEach(track => track.stop());
     screenStream?.getTracks().forEach(track => track.stop());
     router.push('/');

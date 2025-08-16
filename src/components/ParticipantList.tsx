@@ -1,6 +1,6 @@
 // src/components/ParticipantList.tsx
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Mic, MicOff, Video, VideoOff, User } from 'lucide-react';
 
 type Participant = {
@@ -28,7 +28,6 @@ export function ParticipantList({ open, onOpenChange, participants }: Participan
             <div key={p.name} className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Avatar>
-                  <AvatarImage src={`https://i.pravatar.cc/150?u=${p.email || p.name}`} />
                   <AvatarFallback><User /></AvatarFallback>
                 </Avatar>
                 <span className="font-medium">{p.name}</span>

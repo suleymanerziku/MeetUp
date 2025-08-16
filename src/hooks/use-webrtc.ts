@@ -1,6 +1,6 @@
 // src/hooks/use-webrtc.ts
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { ref, onValue, set, onDisconnect, child, remove, serverTimestamp } from 'firebase/database';
+import { ref, onValue, set, onDisconnect, child, remove, serverTimestamp, get } from 'firebase/database';
 import { db } from '@/lib/firebase';
 import { useAuth } from './use-auth.tsx';
 
@@ -15,6 +15,7 @@ interface Participant {
 }
 
 export interface Message {
+  id: string;
   senderId: string;
   senderName: string;
   content: string;
@@ -37,18 +38,24 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
   const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
   const meetingRef = ref(db, `meetings/${meetingId}`);
   const chatRef = ref(db, `meetings/${meetingId}/chat`);
+  const localStreamRef = useRef(localStream);
+
+  useEffect(() => {
+    localStreamRef.current = localStream;
+  }, [localStream]);
 
   const handleNewParticipant = useCallback(async (participantId: string, name: string) => {
-    if (!user || participantId === user.uid || !localStream) return;
+    if (!user || participantId === user.uid || !localStreamRef.current) return;
 
     if (peerConnections.current[participantId]) {
-      peerConnections.current[participantId].close();
+      // Connection already exists
+      return;
     }
     
     const pc = new RTCPeerConnection(ICE_SERVERS);
     peerConnections.current[participantId] = pc;
 
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    localStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current!));
 
     pc.ontrack = (event) => {
       setParticipants(prev =>
@@ -71,7 +78,7 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
       }
     };
 
-  }, [user, meetingId, localStream]);
+  }, [user, meetingId]);
 
   useEffect(() => {
     if (!user || !meetingId) return;
@@ -82,24 +89,31 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
     const hostRef = ref(db, `meetings/${meetingId}/host`);
     const screenSharePolicyRef = ref(db, `meetings/${meetingId}/config/canOthersShare`);
 
-    onValue(hostRef, (snapshot) => {
+    const setup = async () => {
+      const hostSnapshot = await get(hostRef);
+      const hostId = hostSnapshot.val();
+      if (!hostId) {
+        await set(hostRef, user.uid);
+        setIsHost(true);
+        await set(screenSharePolicyRef, true); // Host can share by default
+      } else {
+        setIsHost(hostId === user.uid);
+      }
+    };
+    setup();
+    
+    const onHostChange = onValue(hostRef, (snapshot) => {
         const hostId = snapshot.val();
-        if(!hostId) {
-            set(hostRef, user.uid);
-            setIsHost(true);
-            set(screenSharePolicyRef, true);
-        } else {
-            setIsHost(hostId === user.uid);
-        }
+        setIsHost(hostId === user.uid);
     });
 
-    onValue(screenSharePolicyRef, (snapshot) => {
+    const onScreenSharePolicyChange = onValue(screenSharePolicyRef, (snapshot) => {
         setCanOthersShare(snapshot.val() ?? false);
     });
 
-    onValue(presenceRef, (snap) => {
+    const onPresenceChange = onValue(presenceRef, (snap) => {
       if (snap.val() === true) {
-        set(userRef, { name: user.displayName || "Anonymous", email: user.email, online: true, id: user.uid });
+        set(userRef, { name: user.displayName || "Anonymous", email: user.email, online: true, id: user.uid, isMuted: false, isCameraOff: false, isSharingScreen: false });
         onDisconnect(userRef).remove();
         onDisconnect(hostRef).get().then(snapshot => {
             if (snapshot.val() === user.uid) {
@@ -124,12 +138,19 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
           }));
         
         setParticipants(currentParticipants => {
-          const newParticipants = otherUsers.filter(u => !currentParticipants.find(p => p.id === u.id));
-          const removedParticipants = currentParticipants.filter(p => !otherUsers.find(u => u.id === p.id) && p.id !== user.uid);
+          const newParticipantIds = new Set(otherUsers.map(u => u.id));
+          const oldParticipantIds = new Set(currentParticipants.map(p => p.id));
           
-          newParticipants.forEach(p => handleNewParticipant(p.id, p.name));
-          removedParticipants.forEach(p => {
-             if (peerConnections.current[p.id]) {
+          // New users
+          otherUsers.forEach(p => {
+              if(!oldParticipantIds.has(p.id)) {
+                handleNewParticipant(p.id, p.name);
+              }
+          });
+
+          // Users who left
+          currentParticipants.forEach(p => {
+             if (!newParticipantIds.has(p.id) && peerConnections.current[p.id]) {
                 peerConnections.current[p.id].close();
                 delete peerConnections.current[p.id];
              }
@@ -143,7 +164,7 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
 
     const unSubOffers = onValue(ref(db, `meetings/${meetingId}/users/${user.uid}/offers`), async (snapshot) => {
       const offers = snapshot.val();
-      if(!offers || !localStream) return;
+      if(!offers || !localStreamRef.current) return;
       for (const fromId in offers) {
         if(!user) continue;
 
@@ -151,7 +172,7 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
         const pc = peerConnections.current[fromId] || new RTCPeerConnection(ICE_SERVERS);
         if (!peerConnections.current[fromId]) {
           peerConnections.current[fromId] = pc;
-          localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+          localStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current!));
           pc.ontrack = (event) => {
              setParticipants(prev =>
                prev.map(p =>
@@ -201,22 +222,25 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
     });
 
     return () => {
+      onHostChange();
+      onScreenSharePolicyChange();
+      onPresenceChange();
       unSubUsers();
       unSubOffers();
       unSubIce();
+      if (userRef) remove(userRef);
       Object.values(peerConnections.current).forEach(pc => pc.close());
       peerConnections.current = {};
-      remove(userRef);
       setParticipants([]);
     };
-  }, [user, meetingId, localStream, handleNewParticipant]);
+  }, [user, meetingId, handleNewParticipant]);
 
-  const toggleMedia = (kind: 'audio' | 'video' | 'screen') => {
-    if (localStream && (kind === 'audio' || kind === 'video')) {
-      const track = kind === 'audio' ? localStream.getAudioTracks()[0] : localStream.getVideoTracks()[0];
+  const toggleMedia = (kind: 'audio' | 'video' | 'screen', value?: boolean) => {
+    const userRef = ref(db, `meetings/${meetingId}/users/${user?.uid}`);
+    if (localStreamRef.current && (kind === 'audio' || kind === 'video')) {
+      const track = kind === 'audio' ? localStreamRef.current.getAudioTracks()[0] : localStreamRef.current.getVideoTracks()[0];
       if (track) {
-        track.enabled = !track.enabled;
-        const userRef = ref(db, `meetings/${meetingId}/users/${user?.uid}`);
+        track.enabled = value !== undefined ? value : !track.enabled;
         if(kind === 'audio'){
             set(child(userRef, 'isMuted'), !track.enabled);
         } else {
@@ -225,8 +249,7 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
       }
     }
     if (kind === 'screen' && user) {
-        const userRef = ref(db, `meetings/${meetingId}/users/${user.uid}`);
-        set(child(userRef, 'isSharingScreen'), localStream?.getVideoTracks()[0]?.enabled || false);
+        set(child(userRef, 'isSharingScreen'), value);
     }
   };
 
@@ -236,6 +259,25 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
       }
   }
 
+  const listenForMessages = useCallback((callback: (messages: Message[]) => void) => {
+    const messagesRef = ref(db, `meetings/${meetingId}/chat`);
+    return onValue(messagesRef, (snapshot) => {
+      const messagesData = snapshot.val();
+      const messageList: Message[] = messagesData ? Object.entries(messagesData).map(([id, msg]: [string, any]) => ({ id, ...msg })) : [];
+      messageList.sort((a, b) => a.timestamp - b.timestamp);
+      callback(messageList);
+    });
+  }, [meetingId]);
 
-  return { participants, toggleMedia, isHost, canOthersShare, toggleOthersCanShare, chatRef };
+  const cleanup = useCallback(() => {
+    if(user) {
+        const userRef = ref(db, `meetings/${meetingId}/users/${user.uid}`);
+        remove(userRef);
+    }
+    Object.values(peerConnections.current).forEach(pc => pc.close());
+    peerConnections.current = {};
+  }, [user, meetingId]);
+
+
+  return { participants, toggleMedia, isHost, canOthersShare, toggleOthersCanShare, chatRef, listenForMessages, cleanup };
 }
