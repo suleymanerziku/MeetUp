@@ -3,7 +3,7 @@
 
 import { useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { MicOff, User } from 'lucide-react';
+import { MicOff, User, ScreenShare } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -13,6 +13,7 @@ type ParticipantCardProps = {
   email?: string; // Add email to props
   isMuted?: boolean;
   isCameraOff?: boolean;
+  isSharingScreen?: boolean;
   isCurrentUser?: boolean;
   background?: string | null;
   stream?: MediaStream;
@@ -25,6 +26,7 @@ export function ParticipantCard({
   email,
   isMuted = false,
   isCameraOff = false,
+  isSharingScreen = false,
   isCurrentUser = false,
   background,
   stream,
@@ -34,7 +36,7 @@ export function ParticipantCard({
   const videoRef = useRef<HTMLVideoElement>(null);
   
   const containerStyle = isCurrentUser && background ? { backgroundImage: `url(${background})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {};
-  const showAvatar = isCameraOff || !stream;
+  const showAvatar = (isCameraOff && !isSharingScreen) || !stream;
 
   useEffect(() => {
     if (videoRef.current && stream) {
@@ -47,7 +49,7 @@ export function ParticipantCard({
       <div className="absolute inset-0 transition-all duration-300" style={containerStyle}>
         <video 
             ref={videoRef} 
-            className={cn("w-full h-full object-cover", { 'hidden': showAvatar || (isCurrentUser && background) })} 
+            className={cn("w-full h-full object-cover", { 'hidden': showAvatar || (isCurrentUser && background && !isSharingScreen) })} 
             autoPlay 
             playsInline 
             muted={isCurrentUser}
@@ -64,6 +66,13 @@ export function ParticipantCard({
           </Avatar>
           <p className="font-medium text-background bg-black/30 px-2 py-1 rounded-md">{name}</p>
         </div>
+      )}
+      
+      {isSharingScreen && !showAvatar && (
+          <div className="absolute inset-0 bg-black/70 flex items-center justify-center text-white flex-col gap-2">
+              <ScreenShare className="w-12 h-12"/>
+              <p>{name} is sharing their screen.</p>
+          </div>
       )}
 
        {!isCurrentUser && background && (

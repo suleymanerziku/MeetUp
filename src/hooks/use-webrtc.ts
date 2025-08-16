@@ -1,6 +1,6 @@
 // src/hooks/use-webrtc.ts
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { ref, onValue, set, onDisconnect, get, child, remove } from 'firebase/database';
+import { ref, onValue, set, onDisconnect, child, remove, serverTimestamp } from 'firebase/database';
 import { db } from '@/lib/firebase';
 import { useAuth } from './use-auth.tsx';
 
@@ -11,6 +11,14 @@ interface Participant {
   stream?: MediaStream;
   isMuted: boolean;
   isCameraOff: boolean;
+  isSharingScreen: boolean;
+}
+
+export interface Message {
+  senderId: string;
+  senderName: string;
+  content: string;
+  timestamp: number;
 }
 
 const ICE_SERVERS = {
@@ -23,16 +31,17 @@ const ICE_SERVERS = {
 export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
   const { user } = useAuth();
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [isHost, setIsHost] = useState(false);
+  const [canOthersShare, setCanOthersShare] = useState(false);
+  
   const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
   const meetingRef = ref(db, `meetings/${meetingId}`);
+  const chatRef = ref(db, `meetings/${meetingId}/chat`);
 
   const handleNewParticipant = useCallback(async (participantId: string, name: string) => {
     if (!user || participantId === user.uid || !localStream) return;
 
-    console.log(`New participant joined: ${name} (${participantId})`);
-    
     if (peerConnections.current[participantId]) {
-      console.log(`Peer connection for ${participantId} already exists. Closing old one.`);
       peerConnections.current[participantId].close();
     }
     
@@ -42,7 +51,6 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
     pc.ontrack = (event) => {
-      console.log('Remote track received from:', participantId);
       setParticipants(prev =>
         prev.map(p =>
           p.id === participantId ? { ...p, stream: event.streams[0] } : p
@@ -66,30 +74,53 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
   }, [user, meetingId, localStream]);
 
   useEffect(() => {
-    if (!user || !meetingId || !localStream) return;
+    if (!user || !meetingId) return;
 
     const userRef = ref(db, `meetings/${meetingId}/users/${user.uid}`);
     const presenceRef = ref(db, `.info/connected`);
     const usersRef = ref(db, `meetings/${meetingId}/users`);
+    const hostRef = ref(db, `meetings/${meetingId}/host`);
+    const screenSharePolicyRef = ref(db, `meetings/${meetingId}/config/canOthersShare`);
+
+    onValue(hostRef, (snapshot) => {
+        const hostId = snapshot.val();
+        if(!hostId) {
+            set(hostRef, user.uid);
+            setIsHost(true);
+            set(screenSharePolicyRef, true);
+        } else {
+            setIsHost(hostId === user.uid);
+        }
+    });
+
+    onValue(screenSharePolicyRef, (snapshot) => {
+        setCanOthersShare(snapshot.val() ?? false);
+    });
 
     onValue(presenceRef, (snap) => {
       if (snap.val() === true) {
         set(userRef, { name: user.displayName || "Anonymous", email: user.email, online: true, id: user.uid });
         onDisconnect(userRef).remove();
+        onDisconnect(hostRef).get().then(snapshot => {
+            if (snapshot.val() === user.uid) {
+                remove(hostRef);
+            }
+        });
       }
     });
 
-    onValue(usersRef, (snapshot) => {
+    const unSubUsers = onValue(usersRef, (snapshot) => {
       const usersData = snapshot.val();
       if (usersData) {
         const otherUsers = Object.keys(usersData)
-          .filter(uid => uid !== user.uid)
+          .filter(uid => uid !== user.uid && usersData[uid].online)
           .map(uid => ({
             id: uid,
             name: usersData[uid].name,
             email: usersData[uid].email,
             isMuted: usersData[uid].isMuted || false,
             isCameraOff: usersData[uid].isCameraOff || false,
+            isSharingScreen: usersData[uid].isSharingScreen || false,
           }));
         
         setParticipants(currentParticipants => {
@@ -110,9 +141,9 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
       }
     });
 
-    const offersRef = ref(db, `meetings/${meetingId}/users/${user.uid}/offers`);
-    onValue(offersRef, async (snapshot) => {
+    const unSubOffers = onValue(ref(db, `meetings/${meetingId}/users/${user.uid}/offers`), async (snapshot) => {
       const offers = snapshot.val();
+      if(!offers || !localStream) return;
       for (const fromId in offers) {
         if(!user) continue;
 
@@ -145,28 +176,34 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
         } else if (type === 'answer') {
           await pc.setRemoteDescription(new RTCSessionDescription({ type, sdp }));
         }
-        remove(child(offersRef, fromId));
+        remove(ref(db, `meetings/${meetingId}/users/${user.uid}/offers/${fromId}`));
       }
     });
     
-    const iceCandidatesRef = ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates`);
-    onValue(iceCandidatesRef, async (snapshot) => {
+    const unSubIce = onValue(ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates`), async (snapshot) => {
       const candidatesByPeer = snapshot.val();
       if (candidatesByPeer) {
         for (const peerId in candidatesByPeer) {
           const candidates = candidatesByPeer[peerId];
           const pc = peerConnections.current[peerId];
-          if (pc) {
+          if (pc && pc.remoteDescription) {
             for (const mid in candidates) {
-              await pc.addIceCandidate(new RTCIceCandidate(candidates[mid]));
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidates[mid]));
+              } catch(e){
+                console.error("Error adding received ICE candidate", e);
+              }
             }
-            remove(child(iceCandidatesRef, peerId));
+            remove(ref(db, `meetings/${meetingId}/users/${user.uid}/iceCandidates/${peerId}`));
           }
         }
       }
     });
 
     return () => {
+      unSubUsers();
+      unSubOffers();
+      unSubIce();
       Object.values(peerConnections.current).forEach(pc => pc.close());
       peerConnections.current = {};
       remove(userRef);
@@ -174,8 +211,8 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
     };
   }, [user, meetingId, localStream, handleNewParticipant]);
 
-  const toggleMedia = (kind: 'audio' | 'video') => {
-    if (localStream) {
+  const toggleMedia = (kind: 'audio' | 'video' | 'screen') => {
+    if (localStream && (kind === 'audio' || kind === 'video')) {
       const track = kind === 'audio' ? localStream.getAudioTracks()[0] : localStream.getVideoTracks()[0];
       if (track) {
         track.enabled = !track.enabled;
@@ -187,8 +224,18 @@ export function useWebRTC(meetingId: string, localStream: MediaStream | null) {
         }
       }
     }
+    if (kind === 'screen' && user) {
+        const userRef = ref(db, `meetings/${meetingId}/users/${user.uid}`);
+        set(child(userRef, 'isSharingScreen'), localStream?.getVideoTracks()[0]?.enabled || false);
+    }
   };
 
+  const toggleOthersCanShare = () => {
+      if (isHost) {
+          set(ref(db, `meetings/${meetingId}/config/canOthersShare`), !canOthersShare);
+      }
+  }
 
-  return { participants, toggleMedia };
+
+  return { participants, toggleMedia, isHost, canOthersShare, toggleOthersCanShare, chatRef };
 }

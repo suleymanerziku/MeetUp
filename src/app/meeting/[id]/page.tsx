@@ -1,16 +1,19 @@
 // src/app/meeting/[id]/page.tsx
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { VideoGrid } from '@/components/VideoGrid';
 import { MeetingControls } from '@/components/MeetingControls';
 import { ParticipantList } from '@/components/ParticipantList';
+import { Chat } from '@/components/Chat';
 import { AIGenerateBackground } from '@/components/AIGenerateBackground';
 import { usePathname, useRouter } from 'next/navigation';
-import { useWebRTC } from '@/hooks/use-webrtc';
+import { useWebRTC, Message } from '@/hooks/use-webrtc';
 import { useAuth } from '@/hooks/use-auth.tsx';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { set, ref, onValue, serverTimestamp } from 'firebase/database';
+import { db } from '@/lib/firebase';
 
 export default function MeetingPage() {
   const { user, loading } = useAuth();
@@ -18,18 +21,23 @@ export default function MeetingPage() {
   const { toast } = useToast();
   
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
 
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCameraOn, setIsCameraOn] = useState(true);
+  const [isSharingScreen, setIsSharingScreen] = useState(false);
+  
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
   const [background, setBackground] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
 
   const pathname = usePathname();
   const meetingId = pathname.split('/').pop()!;
   
-  const { participants, toggleMedia } = useWebRTC(meetingId, localStream);
+  const { participants, toggleMedia, isHost, canOthersShare, toggleOthersCanShare, chatRef } = useWebRTC(meetingId, isSharingScreen ? screenStream : localStream);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -57,11 +65,20 @@ export default function MeetingPage() {
     if(user) getMedia();
 
     return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
+      stream?.getTracks().forEach(track => track.stop());
     }
   }, [user, toast]);
+
+  useEffect(() => {
+    if (!chatRef) return;
+    const unsubscribe = onValue(chatRef, (snapshot) => {
+      const chatData = snapshot.val();
+      const messageList: Message[] = chatData ? Object.values(chatData) : [];
+      messageList.sort((a, b) => a.timestamp - b.timestamp);
+      setMessages(messageList);
+    });
+    return () => unsubscribe();
+  }, [chatRef]);
 
   const onMicToggle = () => {
     toggleMedia('audio');
@@ -73,10 +90,43 @@ export default function MeetingPage() {
     setIsCameraOn(prev => !prev);
   }
 
-  const handleLeaveMeeting = () => {
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
+  const handleScreenShareToggle = async () => {
+    if (isSharingScreen) {
+      screenStream?.getTracks().forEach(track => track.stop());
+      setScreenStream(null);
+      setIsSharingScreen(false);
+    } else {
+        if (!isHost && !canOthersShare) {
+            toast({ variant: 'destructive', title: 'Screen sharing is disabled by the host.'});
+            return;
+        }
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        setScreenStream(stream);
+        setIsSharingScreen(true);
+        stream.getVideoTracks()[0].onended = () => {
+            setIsSharingScreen(false);
+            setScreenStream(null);
+        };
+      } catch (err) {
+        console.error("Error sharing screen:", err);
+      }
     }
+  };
+
+  const handleSendMessage = (content: string) => {
+    if (!user || !chatRef) return;
+    const message: Omit<Message, 'timestamp'> = {
+      senderId: user.uid,
+      senderName: user.displayName || 'Anonymous',
+      content: content,
+    };
+    set(ref(db, `meetings/${meetingId}/chat/${Date.now()}`), {...message, timestamp: serverTimestamp()});
+  };
+
+  const handleLeaveMeeting = () => {
+    localStream?.getTracks().forEach(track => track.stop());
+    screenStream?.getTracks().forEach(track => track.stop());
     router.push('/');
   }
 
@@ -101,19 +151,26 @@ export default function MeetingPage() {
             </div>
           )}
           <VideoGrid 
-            localStream={localStream}
+            localStream={isSharingScreen ? screenStream : localStream}
             participants={participants}
             isLocalCameraOn={isCameraOn} 
+            isLocalSharingScreen={isSharingScreen}
             userBackground={background} 
           />
           <MeetingControls
             isMicOn={isMicOn}
             isCameraOn={isCameraOn}
+            isSharingScreen={isSharingScreen}
+            canOthersShare={canOthersShare}
+            isHost={isHost}
             onMicToggle={onMicToggle}
             onCameraToggle={onCameraToggle}
+            onScreenShareToggle={handleScreenShareToggle}
             onParticipantsToggle={() => setIsParticipantsOpen(p => !p)}
+            onChatToggle={() => setIsChatOpen(p => !p)}
             onAIGeneratorToggle={() => setIsAIGeneratorOpen(p => !p)}
             onEndCall={handleLeaveMeeting}
+            onToggleOthersCanShare={toggleOthersCanShare}
           />
         </div>
         <ParticipantList 
@@ -123,6 +180,13 @@ export default function MeetingPage() {
             { name: user.displayName || 'You', email: user.email || undefined, isMuted: !isMicOn, isCameraOn: isCameraOn },
             ...participants.map(p => ({name: p.name, email: p.email, isMuted: p.isMuted, isCameraOn: !p.isCameraOff}))
         ]}/>
+        <Chat
+            open={isChatOpen}
+            onOpenChange={setIsChatOpen}
+            messages={messages}
+            onSendMessage={handleSendMessage}
+            currentUser={user}
+        />
       </main>
       <AIGenerateBackground 
         open={isAIGeneratorOpen} 

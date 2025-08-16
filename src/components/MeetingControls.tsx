@@ -1,28 +1,40 @@
+// src/components/MeetingControls.tsx
 "use client";
 
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, Users, Wand2, PhoneOff } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, Users, Wand2, PhoneOff, MessageSquare, ScreenShareOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type MeetingControlsProps = {
   isMicOn: boolean;
   isCameraOn: boolean;
+  isSharingScreen: boolean;
+  canOthersShare: boolean;
+  isHost: boolean;
   onMicToggle: () => void;
   onCameraToggle: () => void;
+  onScreenShareToggle: () => void;
   onParticipantsToggle: () => void;
+  onChatToggle: () => void;
   onAIGeneratorToggle: () => void;
   onEndCall: () => void;
+  onToggleOthersCanShare: () => void;
 };
 
 export function MeetingControls({
   isMicOn,
   isCameraOn,
+  isSharingScreen,
+  canOthersShare,
+  isHost,
   onMicToggle,
   onCameraToggle,
+  onScreenShareToggle,
   onParticipantsToggle,
+  onChatToggle,
   onAIGeneratorToggle,
   onEndCall,
+  onToggleOthersCanShare,
 }: MeetingControlsProps) {
 
   const controlButtonClasses = "rounded-full w-14 h-14 transition-all duration-300 ease-in-out transform hover:scale-110";
@@ -48,8 +60,17 @@ export function MeetingControls({
         >
           {isCameraOn ? <Video className="h-6 w-6" /> : <VideoOff className="h-6 w-6" />}
         </Button>
-        <Button variant="secondary" size="icon" className={cn("hidden sm:flex", controlButtonClasses)} aria-label="Share screen">
+        <Button 
+            variant={isSharingScreen ? 'default' : 'secondary'}
+            size="icon" 
+            className={cn(controlButtonClasses)} 
+            aria-label="Share screen"
+            onClick={onScreenShareToggle}
+        >
           <ScreenShare className="h-6 w-6" />
+        </Button>
+        <Button variant="secondary" size="icon" className={cn(controlButtonClasses)} onClick={onChatToggle} aria-label="Open chat">
+          <MessageSquare className="h-6 w-6" />
         </Button>
         <Button variant="secondary" size="icon" className={cn(controlButtonClasses)} onClick={onParticipantsToggle} aria-label="Show participants">
           <Users className="h-6 w-6" />
@@ -57,6 +78,19 @@ export function MeetingControls({
         <Button variant="secondary" size="icon" className={cn(controlButtonClasses, "bg-accent/20 hover:bg-accent/40")} onClick={onAIGeneratorToggle} aria-label="Generate AI background">
           <Wand2 className="h-6 w-6 text-accent-foreground" />
         </Button>
+        
+        {isHost && (
+            <Button 
+                variant={canOthersShare ? 'secondary' : 'destructive'} 
+                size="icon" 
+                className={cn(controlButtonClasses)}
+                onClick={onToggleOthersCanShare}
+                aria-label={canOthersShare ? "Disable others' screen share" : "Enable others' screen share"}
+            >
+              {canOthersShare ? <ScreenShare className="h-6 w-6" /> : <ScreenShareOff className="h-6 w-6" />}
+            </Button>
+        )}
+
         <div className="w-px h-8 bg-border mx-2"></div>
         <Button variant="destructive" size="icon" className="rounded-full w-16 h-14" onClick={onEndCall} aria-label="End call">
           <PhoneOff className="h-6 w-6" />

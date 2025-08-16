@@ -9,16 +9,18 @@ interface Participant {
   stream?: MediaStream;
   isMuted: boolean;
   isCameraOff: boolean;
+  isSharingScreen: boolean;
 }
 
 type VideoGridProps = {
   localStream: MediaStream | null;
   participants: Participant[];
   isLocalCameraOn: boolean;
+  isLocalSharingScreen: boolean;
   userBackground: string | null;
 };
 
-export function VideoGrid({ localStream, participants, isLocalCameraOn, userBackground }: VideoGridProps) {
+export function VideoGrid({ localStream, participants, isLocalCameraOn, isLocalSharingScreen, userBackground }: VideoGridProps) {
   const { user } = useAuth();
 
   return (
@@ -29,6 +31,7 @@ export function VideoGrid({ localStream, participants, isLocalCameraOn, userBack
           email={user.email || undefined}
           isCurrentUser={true}
           isCameraOff={!isLocalCameraOn}
+          isSharingScreen={isLocalSharingScreen}
           background={userBackground}
           stream={localStream || undefined}
           dataAiHint="person video call"
@@ -42,6 +45,7 @@ export function VideoGrid({ localStream, participants, isLocalCameraOn, userBack
           email={p.email}
           isMuted={p.isMuted}
           isCameraOff={p.isCameraOff}
+          isSharingScreen={p.isSharingScreen}
           stream={p.stream}
           dataAiHint="person video call"
         />
