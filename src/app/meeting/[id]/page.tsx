@@ -76,41 +76,19 @@ export default function MeetingPage() {
     }
   }, [user, toast]);
   
-   useEffect(() => {
-    if (videoRef.current) {
-        if(isCameraOn && localStream) {
-            videoRef.current.srcObject = localStream;
-        } else {
-            videoRef.current.srcObject = null;
-        }
-    }
-  }, [isCameraOn, localStream]);
-
-
-  useEffect(() => {
-    if (!chatRef) return;
-    const unsubscribe = listenForMessages((newMessages) => {
-        setMessages(newMessages);
-    });
-    return () => unsubscribe();
-  }, [chatRef, listenForMessages]);
-
   const onMicToggle = () => {
     toggleMedia('audio');
     setIsMicOn(prev => !prev);
   }
 
   const onCameraToggle = async () => {
-    setIsCameraOn(prev => {
-        const newIsCameraOn = !prev;
-        if(localStream){
-            localStream.getVideoTracks().forEach(track => {
-                track.enabled = newIsCameraOn;
-            });
-        }
-        toggleMedia('video');
-        return newIsCameraOn;
-    });
+    if(localStream){
+        localStream.getVideoTracks().forEach(track => {
+            track.enabled = !isCameraOn;
+        });
+    }
+    toggleMedia('video');
+    setIsCameraOn(prev => !prev);
 };
 
 
@@ -134,6 +112,14 @@ export default function MeetingPage() {
       }
     }
   };
+  
+   useEffect(() => {
+    if (!chatRef) return;
+    const unsubscribe = listenForMessages((newMessages) => {
+        setMessages(newMessages);
+    });
+    return () => unsubscribe();
+  }, [chatRef, listenForMessages]);
 
   const handleSendMessage = (content: string) => {
     if (!user || !chatRef) return;
@@ -213,7 +199,7 @@ export default function MeetingPage() {
         </div>
 
         <ParticipantList isOpen={isParticipantsOpen} onClose={() => setIsParticipantsOpen(false)} participants={allParticipants} />
-        <Chat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} messages={messages} onSendMessage={handleSendMessage} currentUser={user}/>
+        <Chat open={isChatOpen} onOpenChange={setIsChatOpen} messages={messages} onSendMessage={handleSendMessage} currentUser={user}/>
         <AIGenerateBackground open={isAIGeneratorOpen} onOpenChange={setIsAIGeneratorOpen} onBackgroundGenerated={setBackground} />
       </main>
     </div>
