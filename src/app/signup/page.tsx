@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -38,11 +39,11 @@ export default function SignupPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm shadow-lg">
-        <CardHeader className="text-center">
-           <Link href="/" className="inline-flex justify-center mb-4">
-            <Video className="h-10 w-10 text-primary" />
-          </Link>
-          <CardTitle className="font-headline text-2xl">Create an account</CardTitle>
+        <CardHeader className="text-center space-y-2">
+            <div className="flex justify-center items-center gap-2">
+               <Video className="h-8 w-8 text-primary" />
+               <CardTitle className="font-headline text-3xl">MeetUp</CardTitle>
+            </div>
           <CardDescription>
             Enter your information to create a new account.
           </CardDescription>
